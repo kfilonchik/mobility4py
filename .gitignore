@@ -9,6 +9,11 @@ __pycache__/
 config.json
 /cache
 /datasets
+/maps/.amlignore
+/maps/.amlignore.amltmp
+.amlignore
+.amlignore.amltmp
+.ipynb_aml_checkpoints
 # Distribution / packaging
 .Python
 build/
