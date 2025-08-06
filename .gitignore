@@ -11,6 +11,7 @@ config.json
 /datasets
 /maps/.amlignore
 /maps/.amlignore.amltmp
+/maps
 .amlignore
 .amlignore.amltmp
 .ipynb_aml_checkpoints
