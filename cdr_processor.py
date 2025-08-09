@@ -23,19 +23,25 @@ class CDRProcessor:
             )
 
             # Project tower coordinates to metric CRS (EPSG:3763)
-            towers_gdf_proj = towers_gdf.to_crs(self.crs_proj)
+            towers_gdf = towers_gdf.to_crs(self.crs_proj)
 
             towers_gdf["az_min"] = towers_gdf["cell_id"].map(df.groupby("cell_id")["azi_min1"].first())
             towers_gdf["az_max"] = towers_gdf["cell_id"].map(df.groupby("cell_id")["azi_max1"].first())
+            towers_gdf["new_radius"] = towers_gdf["cell_id"].map(df.groupby("cell_id")["new_radius"].first())
 
             towers_gdf["sector_poly"] = [
-                GeometryUtils.make_sector_projected(
-                    pt.x, pt.y, 
-                    *GeometryUtils.adjust_azimuth_for_omni(az_min, az_max), 
-                    self.radius_km * 1000
-                )
-                for pt, az_min, az_max in zip(towers_gdf.geometry, towers_gdf["az_min"], towers_gdf["az_max"])
-            ]
+                        GeometryUtils.make_sector_projected(
+                            pt.x, pt.y,
+                            *GeometryUtils.adjust_azimuth_for_omni(az_min, az_max),
+                            radius  # << this is unique per tower
+                        )
+                        for pt, az_min, az_max, radius in zip(
+                            towers_gdf.geometry,
+                            towers_gdf["az_min"],
+                            towers_gdf["az_max"],
+                            towers_gdf["new_radius"]
+                        )
+                    ]
 
             sectors_gdf = gpd.GeoDataFrame(towers_gdf[["cell_id"]], geometry=towers_gdf["sector_poly"], crs=self.crs_proj)
             sectors_gdf["geometry"] = sectors_gdf.geometry.apply(lambda g: g.difference(water_union))
@@ -43,6 +49,8 @@ class CDRProcessor:
             sectors_gdf["geometry"] = sectors_gdf.geometry.apply(
                 lambda g: max(g.geoms, key=lambda gg: gg.area) if g.geom_type == "MultiPolygon" else g
             )
+
+            sectors_gdf.to_file("sectors.geojson", driver="GeoJSON")
 
             df = df.merge(
                 sectors_gdf[["cell_id", "geometry"]],

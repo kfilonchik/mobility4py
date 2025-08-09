@@ -21,11 +21,16 @@ if __name__ == "__main__":
         df = df[['unique_id', 'time_id','event_date', 'a_bts_cgi']]
 
         # Read network file
-        network_asset = ml_client.data.get("network_file_v8", version="1")
+        network_asset = ml_client.data.get("network_file_v9", version="1")
         network = pd.read_csv(network_asset.path)
-        network['cell_id'] = network['cgi_key']
+        
+        network = network.dropna(how="all")
+        network['cell_id'] = network['cgi_key'].astype("int")
+        network['cell_key'] = network['cgi_key'].astype("int")
 
-        cdr_df = pd.merge(df, network[['longitude_cell', 'latitude_cell','cgi_key', 'cell_id','r', 'azi_min1', 'azi_max1', 'concelho']], left_on='a_bts_cgi', right_on='cgi_key', how='inner')
+        cdr_df = pd.merge(df, network[['longitude_cell', 'latitude_cell','cgi_key', 'cell_id','r', 'azi_min1', 'azi_max1', 'concelho', 'new_radius']], left_on='a_bts_cgi', right_on='cgi_key', how='inner')
+
+        #cdr_df = cdr_df.sample(10000)
 
         rivers_gdf = gpd.read_file("datasets/hotosm_prt_waterways_polygons_geojson.geojson")
         rivers_gdf = rivers_gdf.loc[(rivers_gdf['name:en'] == 'Tagus River') & (rivers_gdf['osm_type'] == 'ways_poly')]
@@ -33,6 +38,8 @@ if __name__ == "__main__":
         logger.info("Running mobility pipeline...")
         pipeline = MobilityPipeline(radius_km=1.0)
         results = pipeline.run(cdr_df, rivers_gdf)
+
+        results["processed_cdr"] = results["processed_cdr"].drop(columns=['geometry', 'point_proj'])
 
         results["processed_cdr"].to_pickle("datasets/processed_cdr.pkl")
         #results["staypoints"].to_csv("output/staypoints.csv", index=False)

@@ -25,6 +25,7 @@ class GeometryUtils:
 
         az_min = GeometryUtils.telco_to_math_angle(azimuth_min_telco)
         az_max = GeometryUtils.telco_to_math_angle(azimuth_max_telco)
+
         if az_max < az_min:
             az_max += 360
         return az_min, az_max
@@ -49,4 +50,3 @@ class GeometryUtils:
             if polygon.contains(point):
                 return point
         return polygon.centroid
-
