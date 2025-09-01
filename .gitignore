@@ -12,6 +12,9 @@ config.json
 /maps/.amlignore
 /maps/.amlignore.amltmp
 /maps
+/output
+/logs
+/notebooks_test
 .amlignore
 .amlignore.amltmp
 .ipynb_aml_checkpoints
