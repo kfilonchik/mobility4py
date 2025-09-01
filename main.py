@@ -31,6 +31,7 @@ if __name__ == "__main__":
         cdr_df = pd.merge(df, network[['longitude_cell', 'latitude_cell','cgi_key', 'cell_id','r', 'azi_min1', 'azi_max1', 'concelho', 'new_radius']], left_on='a_bts_cgi', right_on='cgi_key', how='inner')
 
         #cdr_df = cdr_df.sample(10000)
+        #cdr_df = pd.read_pickle("/home/azureuser/cloudfiles/code/Users/20230692/mobility4py/datasets/processed_cdr.pkl")
 
         rivers_gdf = gpd.read_file("datasets/hotosm_prt_waterways_polygons_geojson.geojson")
         rivers_gdf = rivers_gdf.loc[(rivers_gdf['name:en'] == 'Tagus River') & (rivers_gdf['osm_type'] == 'ways_poly')]
@@ -39,11 +40,20 @@ if __name__ == "__main__":
         pipeline = MobilityPipeline(radius_km=1.0)
         results = pipeline.run(cdr_df, rivers_gdf)
 
-        results["processed_cdr"] = results["processed_cdr"].drop(columns=['geometry', 'point_proj'])
+        #results["processed_cdr"] = results["processed_cdr"].drop(columns=['geometry', 'point_proj'])
 
-        results["processed_cdr"].to_pickle("datasets/processed_cdr.pkl")
+        #results["processed_cdr"].to_pickle("output/processed_cdr.pkl")
         #results["staypoints"].to_csv("output/staypoints.csv", index=False)
         #results["trips"].to_csv("output/trips.csv", index=False)
+
+        #if results["staypoints"] is not None:
+            #results["staypoints"].to_pickle("output/staypoints.pkl")
+        #if results["triplegs"] is not None:
+            #results["triplegs"].to_pickle("output/triplegs.pkl")
+        #if results["pfs"] is not None:
+            #results["pfs"].to_pickle("output/pfs.pkl")
+
+        logger.info("Done.")
 
         logger.info("All results saved successfully.")
 
