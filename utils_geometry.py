@@ -50,3 +50,12 @@ class GeometryUtils:
             if polygon.contains(point):
                 return point
         return polygon.centroid
+    
+    @staticmethod
+    def convert_to_unix_timestamp(df: pd.DataFrame, timestamp_col: str, output_col: str = "unix_timestamp") -> pd.DataFrame:
+        """Convert a datetime-like column to UNIX seconds."""
+        out = df.copy()
+        out[timestamp_col] = pd.to_datetime(out[timestamp_col])
+        out[output_col] = (out[timestamp_col] - pd.Timestamp("1970-01-01")) // pd.Timedelta("1s")
+
+        return out
