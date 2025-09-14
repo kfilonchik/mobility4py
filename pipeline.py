@@ -1,6 +1,6 @@
 import logging
 from  cdr_processor import CDRProcessor
-from trackintel_render import TrackintelBridge
+from mobility4py.trackintel_render import TrackintelBridge
 from infostop_detector import InfoStopDetector
 from analytics import MobilityAnalytics
 #from .staypoint_detector import StaypointDetector
@@ -19,8 +19,7 @@ class MobilityPipeline:
     def run(self, df, rivers_gdf):
         try:
             self.logger.info("Pipeline started.")
-            #df_processed = self.cdr_processor.process(df, rivers_gdf)
-            df_processed = df
+            df_processed = self.cdr_processor.process(df, rivers_gdf)
             staypoints = self.stops.run(df_processed)
             self.logger.info("Saving Staypoints.")
             staypoints.to_pickle("output/staypoints.pkl")
@@ -29,7 +28,7 @@ class MobilityPipeline:
             pfs = self.ti.to_positionfixes(staypoints)
 
             # 4) staypoints (from stop_id) and assign to pfs
-            sps = self.ti.build_staypoints_from_stopids(pfs)
+            sps = self.ti.build_staypoints_from_pfs(pfs)
             pfs_sp = self.ti.assign_staypoint_ids_to_pfs(pfs, sps)
 
             sps_hw = self.analytics.annotate_home_work(sps)
@@ -50,6 +49,8 @@ class MobilityPipeline:
             self.logger.info("Saving Triplegs.")
             tpls.to_pickle("output/triplegs.pkl")
 
+            staypoints, tpls, trips = self.ti.generate_trips(tpls, sps_hw)
+
             #trips = self.trip_segmenter.segment(staypoints)
             self.logger.info("Pipeline completed successfully.")
             return {
@@ -57,8 +58,8 @@ class MobilityPipeline:
                 "staypoints": staypoints,
                 "staypoints_hw": sps_hw,
                 "pfs": pfs_spd,
-                "triplegs": tpls
-                #"trips": trips
+                "triplegs": tpls,
+                "trips": trips
             }
         except Exception as e:
             self.logger.error(f"Pipeline failed: {e}", exc_info=True)

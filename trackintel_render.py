@@ -19,28 +19,67 @@ class TrackintelBridge:
             crs="EPSG:4326"
         )
         pfs = ti.io.read_positionfixes_gpd(
-            gdf, user_id='user_id', tracked_at='timestamp', geom_col='geometry', tz=self.tz
+            gdf, user_id='unique_id', tracked_at='timestamp', geom_col='geometry', tz=self.tz
         )
         return pfs
 
-    def build_staypoints_from_stopids(self, pfs: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+
+    def build_staypoints_from_pfs(self, pfs: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         """
-        Your aggregation logic turning InfoStop 'stop_id' into TI-style staypoints.
+        Build staypoints from (user_id, stop_id, tracked_at) with day resets.
+        - Consecutive rows with same (user_id, day, stop_id) belong to one staypoint.
+        - Rows with stop_id == -1 are ignored (staypoint_id = NA).
+        - Returns a GeoDataFrame with user_id, staypoint_id, started_at, finished_at, stop_id, geometry.
+        - Index is set to staypoint_id (kept also as a column).
         """
-        assert 'stop_id' in pfs.columns, "Positionfixes must carry 'stop_id'"
-        # Only rows assigned to a stop
-        s = pfs.loc[pfs['stop_id'] != -1].copy()
-        # Aggregate per (user, stop_id, date) into a single stay (min..max interval)
-        #s['event_date'] = s['tracked_at'].dt.date
-        agg = (
-            s.groupby(['user_id','stop_id','event_date'], as_index=False)
-             .agg(started_at=('tracked_at','min'),
-                  finished_at=('tracked_at','max'),
-                  geometry=('geometry','first'))        # centroid or first is okay for TI schema
+        df = pfs.copy()
+        # Day boundary (if you need Lisbon-local days, replace with:
+        # df["day"] = df["tracked_at"].dt.tz_convert("Europe/Lisbon").dt.normalize()
+        df["day"] = df["tracked_at"].dt.normalize()
+
+        # Work on a sorted copy; keep original index for alignment
+        g = df.sort_values(["user_id", "day", "tracked_at"]).copy()
+
+        valid = g["stop_id"].ne(-1)
+        starts = (
+            g["user_id"].ne(g["user_id"].shift()) |   # new user
+            g["day"].ne(g["day"].shift()) |           # new day
+            g["stop_id"].ne(g["stop_id"].shift())     # stop changed
         )
-        agg['staypoint_id'] = np.arange(len(agg))
-        sps = gpd.GeoDataFrame(agg, geometry='geometry', crs=pfs.crs)
-        return sps
+
+        # Global ID that increments only on valid starts; -1 rows -> NA
+        g["staypoint_id"] = (starts & valid).cumsum()
+        g.loc[~valid, "staypoint_id"] = np.nan
+        g["staypoint_id"] = g["staypoint_id"].astype("Int64")
+
+        # Map IDs back to original row order without shifting anything
+        df["staypoint_id"] = g.sort_index()["staypoint_id"]
+
+        # Aggregate stays (ignore NA)
+        staypoints = (
+            df.dropna(subset=["staypoint_id"])
+            .groupby(["user_id", "staypoint_id"], as_index=False)
+            .agg(
+                started_at=("tracked_at", "min"),
+                finished_at=("tracked_at", "max"),
+                stop_id=("stop_id", "first"),
+                geometry=("geometry", "first")  # or compute centroid if preferred
+            )
+            .sort_values(["user_id", "started_at"])
+        )
+
+        # Optional: duration
+        #staypoints["duration"] = staypoints["finished_at"] - staypoints["started_at"]
+
+        # GeoDataFrame with same CRS as input
+        #staypoints = gpd.GeoDataFrame(staypoints, geometry="geometry", crs=pfs.crs)
+        staypoints = ti.io.read_staypoints_gpd(staypoints, started_at = 'started_at', finished_at ='finished_at', geom_col = 'geometry', crs="EPSG:4326", tz='Europe/Lisbon')
+
+        # Set index to staypoint_id but keep the column
+        staypoints = staypoints.set_index("staypoint_id", drop=False)
+
+        return g, staypoints
+
 
     def assign_staypoint_ids_to_pfs(self, pfs: gpd.GeoDataFrame, sps: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         """
@@ -54,7 +93,8 @@ class TrackintelBridge:
 
         p = pfs.copy()
         #p['event_date'] = p['tracked_at'].dt.normalize()
-        p = p.merge(tmp[["user_id","started_at","staypoint_id"]],
+        p = p.sort_values(["user_id","tracked_at"], kind="mergesort").reset_index(drop=True)
+        p = p.merge(tmp[["user_id","started_at","staypoint_id", "geometry"]],
                     left_on = ["user_id","tracked_at"],
                     right_on= ["user_id","started_at"],
                     how="left"
@@ -89,3 +129,14 @@ class TrackintelBridge:
         pfs, tpls = ti.preprocessing.generate_triplegs(pfs_with_sp, sps, 'overlap_staypoints',gap_threshold=30)
 
         return pfs, tpls 
+    
+    def pfs_trips(self, tpls: gpd.GeoDataFrame, sps: gpd.GeoDataFrame):
+        """
+        Use trackintel to derive triplegs and trips from positionfixes+staypoints.
+        Exact function names depend on TI version; the idea is:
+         - segment into triplegs between staypoints
+         - aggregate triplegs into trips
+        """
+        staypoints, triplegs, trips = ti.preprocessing.generate_trips(tpls, sps)
+
+        return staypoints, triplegs, trips

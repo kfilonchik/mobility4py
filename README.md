@@ -10,7 +10,6 @@ It covers antenna-sector spreading, staypoint detection (InfoStop), and trajecto
 - **Staypoints (InfoStop)**: robust to sparse/irregular CDRs; configurable dwell/distance/time parameters.
 - **Trajectories (trackintel)**: build `positionfixes`, `staypoints`, `triplegs`, `trips`; assign `staypoint_id` to fixes.
 - **Analytics**: home/work labeling (`osna_method`), tripleg length, duration, and speed; positionfix speeds.
-- **Optional**: simple, illustrative transport mode tagging (not a validated classifier).
 
 ---
 
